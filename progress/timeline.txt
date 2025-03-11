@@ -1,0 +1,1370 @@
+Case for a Decentralized Carbon Credit Trading Platform## What is the Carbon Credit Market?The carbon credit market is a key component in the global effort to reduce greenhouse gas emissions and combat climate change. Here's a brief overview:1. Definition: A carbon credit represents the right to emit one tonne of carbon dioxide or equivalent greenhouse gas.2. Purpose: The market creates a financial incentive for companies and individuals to reduce their carbon emissions.3. How it works: - Entities that reduce their emissions below a set quota can sell their excess allowances as credits. - Those who exceed their quotas can buy these credits to offset their excess emissions.4. Types of credits: - Compliance markets: Legally mandated, used by companies and governments to meet regulatory requirements. - Voluntary markets: Used by businesses and individuals to voluntarily offset their carbon footprint.5. Project examples: Reforestation, renewable energy installations, methane capture from landfills, etc.6. Current challenges: Lack of standardization, verification difficulties, and limited accessibility for smaller participants.## The ProblemThe current carbon credit market faces several challenges:1. Lack of transparency leading to double-counting and fraud2. High entry barriers for smaller players3. Inefficient and costly verification processes4. Limited liquidity and market access---------------------------------------------------------------------------------------------------------------## Our SolutionOur decentralized platform addresses these issues by:1. Using blockchain to ensure transparent, immutable record-keeping2. Tokenizing carbon credits as NFTs for easy trading and tracking3. Implementing smart contracts for automated, cost-effective verification4. Enabling peer-to-peer trading to increase market accessibility5. Integrating IoT devices for real-time monitoring and verification## Key Benefits1. Increased trust in the carbon offset market2. Reduced costs for all participants3. Improved accessibility for smaller entities4. Enhanced efficiency in credit issuance and trading5. Real-time tracking of carbon sequestration efforts## Market PotentialThe global carbon credit market is projected to reach $2.4 trillion by 2027. By addressing current inefficiencies, our platform could capture a significant portion of this market while accelerating global efforts to combat climate change.## Competitive AdvantageUnlike traditional carbon credit systems, our platform:- Offers unparalleled transparency- Reduces verification costs by up to 90%- Enables real-time tracking and trading- Is accessible to both large corporations and individual landowners## Call to ActionBy supporting this project, you're not just backing a innovative technology solution – you're contributing to a more efficient, transparent, and accessible system for global carbon reduction efforts. Let's revolutionize the fight against climate change, one carbon credit at a time.
+
+
+ --------------------------------------------------------------------------
+
+I chose alchemy as blockchain platform, and following is the structure...
+# Carbon Credit Trading Platform
+
+## Project Structure
+```
+carbon-credit-platform/
+├── contracts/
+│   ├── CarbonCredit.sol       # ERC-721 token for carbon credits
+│   ├── CarbonCreditMarket.sol # Marketplace for trading credits
+│   └── Verification.sol       # Verification logic and oracles
+├── frontend/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── backend/
+    ├── api/
+    └── verification-service/
+```
+
+## Tech Stack
+- Blockchain: Ethereum (Alchemy)
+- Smart Contracts: Solidity
+- Frontend: React.js + ethers.js
+- Backend: Node.js
+- Development Tools: Hardhat, OpenZeppelin
+
+## Three Main Sections
+1. Smart Contracts Development
+2. Frontend Interface
+3. Backend Services & Verification System
+--------------------------------------------------------------------------------------------------------------------
+
+so far i've done
+----------------------------
+CarbonCredit.sol
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract CarbonCredit is ERC721, Ownable {
+    uint256 private _nextTokenId;
+
+    struct Credit {
+        uint256 amount; // Amount of carbon offset in tonnes
+        string projectType; // Type of carbon offset project
+        uint256 validUntil; // Timestamp until which the credit is valid
+        bool verified; // Verification status
+        string metadataURI; // URI for additional metadata
+    }
+
+    mapping(uint256 => Credit) public credits;
+
+    event CreditMinted(uint256 indexed tokenId, address indexed owner, uint256 amount);
+    event CreditVerified(uint256 indexed tokenId);
+
+    constructor() ERC721("Carbon Credit", "CC") Ownable(msg.sender) {}
+
+    function mintCredit(
+        address recipient,
+        uint256 amount,
+        string memory projectType,
+        uint256 validityPeriod,
+        string memory metadataURI
+    ) public onlyOwner returns (uint256) {
+        uint256 tokenId = _nextTokenId++;
+        _safeMint(recipient, tokenId);
+        
+        credits[tokenId] = Credit({
+            amount: amount,
+            projectType: projectType,
+            validUntil: block.timestamp + validityPeriod,
+            verified: false,
+            metadataURI: metadataURI
+        });
+
+        emit CreditMinted(tokenId, recipient, amount);
+        return tokenId;
+    }
+
+    function verifyCredit(uint256 tokenId) public onlyOwner {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        credits[tokenId].verified = true;
+        emit CreditVerified(tokenId);
+    }
+
+    function getCreditDetails(uint256 tokenId) public view returns (Credit memory) {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        return credits[tokenId];
+    }
+}
+-----------------------------
+
+----------------------------------------
+CarbonCreditMarket.sol
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract CarbonCreditMarket is Ownable {
+    struct Listing {
+        address seller;
+        uint256 price;
+        bool isActive;
+    }
+
+    IERC721 public carbonCreditToken;
+    
+    mapping(uint256 => Listing) public listings;
+    
+    event CreditListed(uint256 indexed tokenId, address indexed seller, uint256 price);
+    event CreditSold(uint256 indexed tokenId, address indexed seller, address indexed buyer, uint256 price);
+    event ListingCanceled(uint256 indexed tokenId, address indexed seller);
+    event PriceUpdated(uint256 indexed tokenId, uint256 newPrice);
+
+    constructor(address _carbonCreditToken) Ownable(msg.sender) {
+        carbonCreditToken = IERC721(_carbonCreditToken);
+    }
+
+    function listCredit(uint256 tokenId, uint256 price) external {
+        require(carbonCreditToken.ownerOf(tokenId) == msg.sender, "Not token owner");
+        require(carbonCreditToken.getApproved(tokenId) == address(this), "Market not approved");
+        
+        listings[tokenId] = Listing({
+            seller: msg.sender,
+            price: price,
+            isActive: true
+        });
+        
+        emit CreditListed(tokenId, msg.sender, price);
+    }
+
+    function buyCredit(uint256 tokenId) external payable {
+        Listing memory listing = listings[tokenId];
+        require(listing.isActive, "Listing not active");
+        require(msg.value == listing.price, "Incorrect price");
+        
+        address seller = listing.seller;
+        delete listings[tokenId];
+        
+        carbonCreditToken.transferFrom(seller, msg.sender, tokenId);
+        
+        (bool sent, ) = payable(seller).call{value: msg.value}("");
+        require(sent, "Failed to send Ether");
+        
+        emit CreditSold(tokenId, seller, msg.sender, msg.value);
+    }
+
+    function cancelListing(uint256 tokenId) external {
+        require(listings[tokenId].seller == msg.sender, "Not the seller");
+        delete listings[tokenId];
+        emit ListingCanceled(tokenId, msg.sender);
+    }
+
+    function updatePrice(uint256 tokenId, uint256 newPrice) external {
+        require(listings[tokenId].seller == msg.sender, "Not the seller");
+        listings[tokenId].price = newPrice;
+        emit PriceUpdated(tokenId, newPrice);
+    }
+}
+------------------------------------------------------------
+
+------------------------------------------------------------
+verification.sol
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "./CarbonCredit.sol";
+
+contract Verification is Ownable {
+    CarbonCredit public carbonCredit;
+    
+    struct VerificationData {
+        address verifier;
+        uint256 timestamp;
+        string metadataURI;
+    }
+    
+    mapping(uint256 => VerificationData) public verificationRecords;
+    mapping(address => bool) public verifiers;
+    
+    event CreditVerified(uint256 indexed tokenId, address indexed verifier, string metadataURI);
+    event VerifierAdded(address indexed account);
+    event VerifierRemoved(address indexed account);
+
+    modifier onlyVerifier() {
+        require(verifiers[msg.sender], "Caller is not a verifier");
+        _;
+    }
+
+    constructor(address _carbonCredit) Ownable(msg.sender) {
+        carbonCredit = CarbonCredit(_carbonCredit);
+        verifiers[msg.sender] = true;
+    }
+
+    function verifyCredit(uint256 tokenId, string memory verificationMetadataURI) external onlyVerifier {
+        carbonCredit.verifyCredit(tokenId);
+        
+        verificationRecords[tokenId] = VerificationData({
+            verifier: msg.sender,
+            timestamp: block.timestamp,
+            metadataURI: verificationMetadataURI
+        });
+        
+        emit CreditVerified(tokenId, msg.sender, verificationMetadataURI);
+    }
+
+    function addVerifier(address account) external onlyOwner {
+        verifiers[account] = true;
+        emit VerifierAdded(account);
+    }
+
+    function removeVerifier(address account) external onlyOwner {
+        verifiers[account] = false;
+        emit VerifierRemoved(account);
+    }
+
+    function getVerificationData(uint256 tokenId) external view returns (VerificationData memory) {
+        return verificationRecords[tokenId];
+    }
+
+    function isVerifier(address account) external view returns (bool) {
+        return verifiers[account];
+    }
+}
+------------------------------------------------------------
+
+
+-------------------------------------------------------------------
+CarbonCredit.test.js
+
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+describe("CarbonCredit", function () {
+  let carbonCredit, owner, addr1;
+  const amount = 100;
+  const projectType = "Reforestation";
+  const validityPeriod = 365 * 24 * 60 * 60; // seconds
+  const metadataURI = "ipfs://example";
+
+  beforeEach(async function () {
+    [owner, addr1] = await ethers.getSigners();
+    
+    const CarbonCredit = await ethers.getContractFactory("CarbonCredit");
+    carbonCredit = await CarbonCredit.deploy();
+  });
+
+  describe("Minting", function () {
+    it("Should mint a new carbon credit", async function () {
+      await expect(carbonCredit.mintCredit(
+        addr1.address,
+        amount,
+        projectType,
+        validityPeriod,
+        metadataURI
+      ))
+        .to.emit(carbonCredit, "CreditMinted")
+        .withArgs(0, addr1.address, amount);
+
+      const credit = await carbonCredit.getCreditDetails(0);
+      expect(credit.amount).to.equal(amount);
+      expect(credit.projectType).to.equal(projectType);
+      expect(credit.verified).to.equal(false);
+      expect(credit.metadataURI).to.equal(metadataURI);
+    });
+  });
+
+  describe("Verification", function () {
+    it("verified a carbon credit", async function () {
+      
+        // minting a credit
+      await carbonCredit.mintCredit(
+        addr1.address,
+        amount,
+        projectType,
+        validityPeriod,
+        metadataURI
+      );
+
+      
+      
+      await expect(carbonCredit.verifyCredit(0))
+        .to.emit(carbonCredit, "CreditVerified")
+        .withArgs(0);
+
+      const credit = await carbonCredit.getCreditDetails(0);
+      expect(credit.verified).to.equal(true);
+    });
+
+    it("failed to verify non-existent credit", async function () {
+      await expect(carbonCredit.verifyCredit(999))
+        .to.be.revertedWith("Token does not exist");
+    });
+  });
+});
+-------------------------------------------------------------------
+
+--------------------------------------------------------------------
+CarbonCreditMarket.test.js
+
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+describe("CarbonCreditMarket", function () {
+  let carbonCredit, carbonMarket, owner, seller, buyer, tokenId;
+  const creditAmount = 100;
+  const projectType = "Reforestation";
+  const validityPeriod = 365 * 24 * 60 * 60;
+  const metadataURI = "ipfs://example";
+  const listingPrice = ethers.parseEther("1.0");
+
+  beforeEach(async function () {
+    [owner, seller, buyer] = await ethers.getSigners();
+    
+    // Deploy CarbonCredit contract
+    const CarbonCredit = await ethers.getContractFactory("CarbonCredit");
+    carbonCredit = await CarbonCredit.deploy();
+
+    // Deploy CarbonCreditMarket contract
+    const CarbonCreditMarket = await ethers.getContractFactory("CarbonCreditMarket");
+    carbonMarket = await CarbonCreditMarket.deploy(await carbonCredit.getAddress());
+
+    // Mint a credit for testing
+    await carbonCredit.mintCredit(
+      seller.address,
+      creditAmount,
+      projectType,
+      validityPeriod,
+      metadataURI
+    );
+    tokenId = 0;
+  });
+
+  describe("Listing", function () {
+    it("Should list a carbon credit", async function () {
+      // Approve market contract
+      await carbonCredit.connect(seller).approve(await carbonMarket.getAddress(), tokenId);
+      
+      await expect(carbonMarket.connect(seller).listCredit(tokenId, listingPrice))
+        .to.emit(carbonMarket, "CreditListed")
+        .withArgs(tokenId, seller.address, listingPrice);
+
+      const listing = await carbonMarket.listings(tokenId);
+      expect(listing.seller).to.equal(seller.address);
+      expect(listing.price).to.equal(listingPrice);
+      expect(listing.isActive).to.be.true;
+    });
+
+    it("Should fail if lister is not token owner", async function () {
+      await carbonCredit.connect(seller).approve(await carbonMarket.getAddress(), tokenId);
+      await expect(carbonMarket.connect(buyer).listCredit(tokenId, listingPrice))
+        .to.be.revertedWith("Not token owner");
+    });
+
+    it("Should fail if market is not approved", async function () {
+      await expect(carbonMarket.connect(seller).listCredit(tokenId, listingPrice))
+        .to.be.revertedWith("Market not approved");
+    });
+  });
+
+  describe("Buying", function () {
+    beforeEach(async function () {
+      await carbonCredit.connect(seller).approve(await carbonMarket.getAddress(), tokenId);
+      await carbonMarket.connect(seller).listCredit(tokenId, listingPrice);
+    });
+
+    it("Should allow buying a listed credit", async function () {
+      await expect(carbonMarket.connect(buyer).buyCredit(tokenId, { value: listingPrice }))
+        .to.emit(carbonMarket, "CreditSold")
+        .withArgs(tokenId, seller.address, buyer.address, listingPrice);
+
+      expect(await carbonCredit.ownerOf(tokenId)).to.equal(buyer.address);
+    });
+
+    it("Should fail if incorrect price is sent", async function () {
+      const wrongPrice = ethers.parseEther("0.5");
+      await expect(carbonMarket.connect(buyer).buyCredit(tokenId, { value: wrongPrice }))
+        .to.be.revertedWith("Incorrect price");
+    });
+
+    it("Should fail if listing is not active", async function () {
+      await carbonMarket.connect(seller).cancelListing(tokenId);
+      await expect(carbonMarket.connect(buyer).buyCredit(tokenId, { value: listingPrice }))
+        .to.be.revertedWith("Listing not active");
+    });
+  });
+
+  describe("Listing Management", function () {
+    beforeEach(async function () {
+      await carbonCredit.connect(seller).approve(await carbonMarket.getAddress(), tokenId);
+      await carbonMarket.connect(seller).listCredit(tokenId, listingPrice);
+    });
+
+    it("Should allow canceling a listing", async function () {
+      await expect(carbonMarket.connect(seller).cancelListing(tokenId))
+        .to.emit(carbonMarket, "ListingCanceled")
+        .withArgs(tokenId, seller.address);
+
+      const listing = await carbonMarket.listings(tokenId);
+      expect(listing.isActive).to.be.false;
+    });
+
+    it("Should allow updating the price", async function () {
+      const newPrice = ethers.parseEther("2.0");
+      await expect(carbonMarket.connect(seller).updatePrice(tokenId, newPrice))
+        .to.emit(carbonMarket, "PriceUpdated")
+        .withArgs(tokenId, newPrice);
+
+      const listing = await carbonMarket.listings(tokenId);
+      expect(listing.price).to.equal(newPrice);
+    });
+  });
+});
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+verification.test.js
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+describe("Verification", function () {
+  let carbonCredit, verification, owner, verifier, user, tokenId;
+  const creditAmount = 100;
+  const projectType = "Reforestation";
+  const validityPeriod = 365 * 24 * 60 * 60;
+  const metadataURI = "ipfs://example";
+  const verificationMetadataURI = "ipfs://verification-data";
+
+  beforeEach(async function () {
+    [owner, verifier, user] = await ethers.getSigners();
+    
+    // Deploy CarbonCredit contract
+    const CarbonCredit = await ethers.getContractFactory("CarbonCredit");
+    carbonCredit = await CarbonCredit.deploy();
+
+    // Mint a credit for testing BEFORE transferring ownership
+    await carbonCredit.mintCredit(
+      user.address,
+      creditAmount,
+      projectType,
+      validityPeriod,
+      metadataURI
+    );
+    tokenId = 0;
+
+    // Deploy Verification contract
+    const Verification = await ethers.getContractFactory("Verification");
+    verification = await Verification.deploy(await carbonCredit.getAddress());
+
+    // Transfer ownership of CarbonCredit to Verification contract for verification process
+    await carbonCredit.transferOwnership(await verification.getAddress());
+  });
+
+  describe("Verifier Management", function () {
+    it("Should add a verifier", async function () {
+      await expect(verification.addVerifier(verifier.address))
+        .to.emit(verification, "VerifierAdded")
+        .withArgs(verifier.address);
+
+      expect(await verification.isVerifier(verifier.address)).to.be.true;
+    });
+
+    it("Should remove a verifier", async function () {
+      await verification.addVerifier(verifier.address);
+      await expect(verification.removeVerifier(verifier.address))
+        .to.emit(verification, "VerifierRemoved")
+        .withArgs(verifier.address);
+
+      expect(await verification.isVerifier(verifier.address)).to.be.false;
+    });
+
+    it("Should only allow owner to add verifiers", async function () {
+      await expect(verification.connect(verifier).addVerifier(user.address))
+        .to.be.revertedWithCustomError(verification, "OwnableUnauthorizedAccount");
+    });
+  });
+
+  describe("Credit Verification", function () {
+    beforeEach(async function () {
+      await verification.addVerifier(verifier.address);
+    });
+
+    it("Should verify a credit", async function () {
+      await expect(verification.connect(verifier).verifyCredit(tokenId, verificationMetadataURI))
+        .to.emit(verification, "CreditVerified")
+        .withArgs(tokenId, verifier.address, verificationMetadataURI);
+
+      const verificationData = await verification.getVerificationData(tokenId);
+      expect(verificationData.verifier).to.equal(verifier.address);
+      expect(verificationData.metadataURI).to.equal(verificationMetadataURI);
+      
+      const creditDetails = await carbonCredit.getCreditDetails(tokenId);
+      expect(creditDetails.verified).to.be.true;
+    });
+
+    it("Should fail if non-verifier attempts verification", async function () {
+      await expect(verification.connect(user).verifyCredit(tokenId, verificationMetadataURI))
+        .to.be.revertedWith("Caller is not a verifier");
+    });
+  });
+
+  describe("Verification Data", function () {
+    beforeEach(async function () {
+      await verification.addVerifier(verifier.address);
+      await verification.connect(verifier).verifyCredit(tokenId, verificationMetadataURI);
+    });
+
+    it("Should return correct verification data", async function () {
+      const verificationData = await verification.getVerificationData(tokenId);
+      expect(verificationData.verifier).to.equal(verifier.address);
+      expect(verificationData.metadataURI).to.equal(verificationMetadataURI);
+      expect(verificationData.timestamp).to.be.gt(0);
+    });
+  });
+});--------------------------------------------------------------------
+
+
+Frontend from here on....
+
+App.jsx
+
+-----------
+
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Home from './pages/Home';
+import Marketplace from './pages/Marketplace';
+import About from './pages/About';
+import News from './pages/News';
+import Auth from './pages/Auth';
+import UserProfile from './pages/UserProfile';
+import Wallet from './pages/Wallet';
+import Footer from './components/Footer';
+import { ThemeProvider } from './contexts/ThemeContext';
+
+function App() {
+  const [user, setUser] = useState(null);
+
+  return (
+    <ThemeProvider>
+      <Router>
+        <div className="flex flex-col min-h-screen bg-white text-gray-900">
+          <Navbar user={user} setUser={setUser} />
+          <div className="container mx-auto px-4 py-8 flex-grow">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/news" element={<News />} />
+              <Route path="/auth" element={<Auth setUser={setUser} />} />
+              <Route path="/profile" element={<UserProfile user={user} setUser={setUser} />} />
+              <Route path="/wallet" element={<Wallet />} />
+            </Routes>
+          </div>
+          <Footer />
+        </div>
+      </Router>
+    </ThemeProvider>
+  );
+}
+
+export default App;
+
+------------------------------------
+
+
+Home.jsx
+------------------------------------
+import React, { useEffect } from 'react';
+import { ArrowRight, TrendingUp, Leaf, DollarSign, Globe, Users, Shield } from 'lucide-react';
+import { Line, Pie } from 'react-chartjs-2';
+import { Link } from 'react-router-dom';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+const Home = () => {
+  useEffect(() => {
+    const observerOptions = {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('fade-in');
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.animate-on-scroll').forEach(el => {
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const marketData = {
+    labels: ['2019', '2020', '2021', '2022', '2023'],
+    datasets: [
+      {
+        label: 'Carbon Credit Market Value (Trillion USD)',
+        data: [0.6, 0.85, 1.0, 2.0, 2.5],
+        borderColor: 'rgb(75, 192, 192)',
+        tension: 0.1
+      }
+    ]
+  };
+
+  const projectTypesData = {
+    labels: ['Renewable Energy', 'Forestry', 'Energy Efficiency', 'Waste Management', 'Others'],
+    datasets: [
+      {
+        data: [40, 25, 15, 12, 8],
+        backgroundColor: [
+          'rgba(255, 99, 132, 0.6)',
+          'rgba(54, 162, 235, 0.6)',
+          'rgba(255, 206, 86, 0.6)',
+          'rgba(75, 192, 192, 0.6)',
+          'rgba(153, 102, 255, 0.6)',
+        ],
+      }
+    ]
+  };
+
+  const carbonProjects = [
+    {
+      name: "Amazonian Reforestation",
+      image: "https://source.unsplash.com/random/800x600?amazon+forest",
+      description: "Restoring vast areas of the Amazon rainforest to combat deforestation and preserve biodiversity."
+    },
+    {
+      name: "Wind Farm Expansion",
+      image: "https://source.unsplash.com/random/800x600?wind+turbines",
+      description: "Expanding wind energy production to reduce reliance on fossil fuels and decrease carbon emissions."
+    },
+    {
+      name: "Sustainable Agriculture",
+      image: "https://source.unsplash.com/random/800x600?sustainable+farming",
+      description: "Implementing sustainable farming practices to reduce agricultural carbon footprint and improve soil health."
+    }
+  ];
+
+  const latestNews = [
+    {
+      title: "Global Carbon Emissions Hit New Record",
+      image: "https://source.unsplash.com/random/800x600?pollution",
+      summary: "Despite efforts to curb greenhouse gases, global carbon emissions reached an all-time high in 2023."
+    },
+    {
+      title: "New Technology Promises to Capture Carbon from the Air",
+      image: "https://source.unsplash.com/random/800x600?technology",
+      summary: "A breakthrough in direct air capture technology could significantly reduce atmospheric CO2 levels."
+    },
+    {
+      title: "Major Companies Pledge to Achieve Net-Zero Emissions",
+      image: "https://source.unsplash.com/random/800x600?corporate",
+      summary: "Leading corporations announce ambitious plans to eliminate their carbon footprint by 2040."
+    }
+  ];
+
+  return (
+    <div className="flex flex-col items-center justify-center bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+      <section className="w-full py-20 text-center">
+        <h1 className="text-5xl font-bold mb-4 animate-on-scroll gradient-text">Welcome to TerraToken</h1>
+        <p className="text-xl mb-8 animate-on-scroll">Empowering a sustainable future through carbon credit trading</p>
+        <blockquote className="text-2xl italic mb-8 animate-on-scroll">
+          "The greatest threat to our planet is the belief that someone else will save it." - Robert Swan
+        </blockquote>
+        <Link to="/marketplace" className="bg-purple-600 text-white px-8 py-3 rounded-full text-lg font-semibold hover:bg-purple-700 transition duration-300 animate-on-scroll inline-block">
+          Get Started <ArrowRight className="inline-block ml-2" />
+        </Link>
+      </section>
+
+      <section className="w-full py-20 bg-gray-50 dark:bg-gray-800">
+        <div className="container mx-auto px-8 flex flex-col md:flex-row items-center">
+          <div className="md:w-1/2 mb-8 md:mb-0 pr-8">
+            <h2 className="text-3xl font-bold mb-4 gradient-text animate-on-scroll">Carbon Credit Market Growth</h2>
+            <p className="text-lg mb-4 animate-on-scroll">
+              The global carbon credit market has seen significant growth in recent years, driven by increasing awareness of climate change and corporate sustainability initiatives. From a market value of $0.6 trillion in 2019, it has surged to $2.5 trillion in 2023, representing a compound annual growth rate (CAGR) of 42.8%.
+            </p>
+            <p className="text-lg animate-on-scroll">
+              This rapid expansion reflects the growing importance of carbon offsetting in corporate strategies and government policies worldwide. As more countries and companies commit to net-zero emissions targets, the demand for carbon credits is expected to continue its upward trajectory.
+            </p>
+          </div>
+          <div className="md:w-1/2 animate-on-scroll">
+            <Line data={marketData} options={{ responsive: true, maintainAspectRatio: false }} className="h-96" />
+          </div>
+        </div>
+      </section>
+
+      <section className="w-full py-20">
+        <div className="container mx-auto px-8">
+          <h2 className="text-3xl font-bold mb-8 text-center gradient-text animate-on-scroll">Why Choose TerraToken?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md animate-on-scroll">
+              <Globe className="w-12 h-12 text-purple-600 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Global Impact</h3>
+              <p>Connect with carbon reduction projects worldwide and make a real difference in the fight against climate change.</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md animate-on-scroll">
+              <Shield className="w-12 h-12 text-purple-600 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Verified Projects</h3>
+              <p>All projects on our platform undergo rigorous verification to ensure their environmental integrity and impact.</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md animate-on-scroll">
+              <Users className="w-12 h-12 text-purple-600 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Community Driven</h3>
+              <p>Join a community of environmentally conscious individuals and businesses committed to sustainability.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="w-full py-20 bg-gray-50 dark:bg-gray-800">
+        <div className="container mx-auto px-8">
+          <h2 className="text-3xl font-bold mb-8 text-center gradient-text animate-on-scroll">How It Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="text-center animate-on-scroll">
+              <div className="bg-purple-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">1</div>
+              <h3 className="text-xl font-semibold mb-2">Browse Projects</h3>
+              <p>Explore a diverse range of carbon reduction projects from around the world.</p>
+            </div>
+            <div className="text-center animate-on-scroll">
+              <div className="bg-purple-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">2</div>
+              <h3 className="text-xl font-semibold mb-2">Purchase Credits</h3>
+              <p>Buy carbon credits from projects that align with your values and goals.</p>
+            </div>
+            <div className="text-center animate-on-scroll">
+              <div className="bg-purple-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">3</div>
+              <h3 className="text-xl font-semibold mb-2">Offset Emissions</h3>
+              <p>Use your credits to offset your carbon footprint and support sustainable initiatives.</p>
+            </div>
+            <div className="text-center animate-on-scroll">
+              <div className="bg-purple-600 text-white rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">4</div>
+              <h3 className="text-xl font-semibold mb-2">Track Impact</h3>
+              <p>Monitor your contribution to carbon reduction and environmental preservation.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="w-full py-20">
+        <div className="container mx-auto px-8">
+          <h2 className="text-3xl font-bold mb-8 text-center gradient-text animate-on-scroll">Carbon Credit Project Types</h2>
+          <div className="max-w-2xl mx-auto">
+            <Pie data={projectTypesData} options={{ responsive: true, maintainAspectRatio: false }} className="h-96" />
+          </div>
+          <p className="text-lg mt-8 text-center animate-on-scroll">
+            Our platform offers a diverse range of carbon credit projects, with renewable energy and forestry initiatives leading the way in combating climate change.
+          </p>
+        </div>
+      </section>
+
+      <section className="w-full py-20 bg-gray-50 dark:bg-gray-800">
+        <div className="container mx-auto px-8">
+          <h2 className="text-3xl font-bold mb-8 text-center gradient-text animate-on-scroll">Featured Carbon Emission Projects</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {carbonProjects.map((project, index) => (
+              <div key={index} className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden animate-on-scroll">
+                <img src={project.image} alt={project.name} className="w-full h-48 object-cover" />
+                <div className="p-6">
+                  <h3 className="text-xl font-semibold mb-2">{project.name}</h3>
+                  <p className="text-gray-600 dark:text-gray-300">{project.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="w-full py-20">
+        <div className="container mx-auto px-8">
+          <h2 className="text-3xl font-bold mb-8 text-center gradient-text animate-on-scroll">Latest News</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {latestNews.map((news, index) => (
+              <div key={index} className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden animate-on-scroll">
+                <img src={news.image} alt={news.title} className="w-full h-48 object-cover" />
+                <div className="p-6">
+                  <h3 className="text-xl font-semibold mb-2">{news.title}</h3>
+                  <p className="text-gray-600 dark:text-gray-300">{news.summary}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default Home;
+--------------------------------------
+
+
+Marketplace.jsx
+-----------------------------------
+import React, { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
+
+const mockProjects = Array.from({ length: 50 }, (_, i) => ({
+  id: i + 1,
+  name: [
+    "Amazonian Reforestation Initiative",
+    "Solar Power for Rural Communities",
+    "Wind Farm Expansion Project",
+    "Methane Capture from Landfills",
+    "Sustainable Agriculture Practices",
+    "Electric Vehicle Charging Network",
+    "Ocean Plastic Removal Program",
+    "Energy-Efficient Building Retrofits",
+    "Mangrove Restoration Project",
+    "Geothermal Energy Development"
+  ][Math.floor(Math.random() * 10)],
+  type: ['Reforestation', 'Solar Energy', 'Wind Energy', 'Methane Capture', 'Sustainable Agriculture'][Math.floor(Math.random() * 5)],
+  location: ['USA', 'Brazil', 'India', 'China', 'Germany', 'Kenya', 'Australia', 'Canada'][Math.floor(Math.random() * 8)],
+  price: Math.floor(Math.random() * (50 - 10 + 1) + 10),
+  credits: Math.floor(Math.random() * (2000 - 500 + 1) + 500),
+  description: `This innovative project aims to reduce carbon emissions through sustainable practices in the ${['agriculture', 'energy', 'transportation', 'manufacturing', 'waste management'][Math.floor(Math.random() * 5)]} sector.`,
+  image: `https://source.unsplash.com/random/800x600?${['nature', 'sustainability', 'energy', 'environment'][Math.floor(Math.random() * 4)]}`
+}));
+
+const Marketplace = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState('All');
+  const [filteredProjects, setFilteredProjects] = useState(mockProjects);
+
+  useEffect(() => {
+    setFilteredProjects(mockProjects.filter(project => 
+      project.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      (selectedType === 'All' || project.type === selectedType)
+    ));
+  }, [searchTerm, selectedType]);
+
+  useEffect(() => {
+    const observerOptions = {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('fade-in');
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.animate-on-scroll').forEach(el => {
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [filteredProjects]);
+
+  return (
+    <div className="container mx-auto px-4 py-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+      <h1 className="text-4xl font-bold mb-8 text-center gradient-text">Carbon Credit Marketplace</h1>
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+        <div className="relative w-full md:w-1/2 mb-4 md:mb-0">
+          <input
+            type="text"
+            placeholder="Search projects..."
+            className="w-full pl-10 pr-4 py-2 border rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+        </div>
+        <select
+          className="w-full md:w-auto px-4 py-2 border rounded-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          value={selectedType}
+          onChange={(e) => setSelectedType(e.target.value)}
+        >
+          <option value="All">All Types</option>
+          <option value="Reforestation">Reforestation</option>
+          <option value="Solar Energy">Solar Energy</option>
+          <option value="Wind Energy">Wind Energy</option>
+          <option value="Methane Capture">Methane Capture</option>
+          <option value="Sustainable Agriculture">Sustainable Agriculture</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {filteredProjects.map((project) => (
+          <div key={project.id} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 animate-on-scroll">
+            <img src={project.image} alt={project.name} className="w-full h-48 object-cover rounded-lg mb-4" />
+            <h2 className="text-xl font-semibold mb-2">{project.name}</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">{project.description}</p>
+            <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">{project.type}</span>
+              <span className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded-full">{project.location}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">${project.price}/credit</span>
+              <button className="bg-purple-600 text-white px-4 py-2 rounded-full hover:bg-purple-700 transition duration-300">
+                Buy Credits
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Marketplace;
+----------------------------------------------
+
+
+wallet.jsx
+----------------
+import React, { useState, useEffect } from 'react';
+import { ArrowUpRight, ArrowDownRight, DollarSign } from 'lucide-react';
+
+const Wallet = () => {
+  const [balance, setBalance] = useState(1000); // Mock initial balance
+  const [transactions, setTransactions] = useState([]);
+
+  useEffect(() => {
+    // Mock fetching transactions
+    const mockTransactions = [
+      { id: 1, type: 'buy', amount: 50, project: 'Amazonian Reforestation', date: '2023-04-15' },
+      { id: 2, type: 'sell', amount: 30, project: 'Solar Farm Initiative', date: '2023-04-10' },
+      { id: 3, type: 'buy', amount: 75, project: 'Wind Energy Project', date: '2023-04-05' },
+      { id: 4, type: 'buy', amount: 25, project: 'Ocean Cleanup Program', date: '2023-03-28' },
+      { id: 5, type: 'sell', amount: 40, project: 'Urban Greening Initiative', date: '2023-03-20' },
+    ];
+    setTransactions(mockTransactions);
+  }, []);
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8 gradient-text">Your Wallet</h1>
+      
+      <div className="bg-white shadow-md rounded-lg p-6 mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Current Balance</h2>
+        <p className="text-4xl font-bold text-purple-600">{balance} Credits</p>
+      </div>
+      
+      <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white shadow-md rounded-lg p-6">
+          <h3 className="text-xl font-semibold mb-4">Quick Actions</h3>
+          <div className="flex space-x-4">
+            <button className="flex-1 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-300">
+              Buy Credits
+            </button>
+            <button className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300">
+              Sell Credits
+            </button>
+          </div>
+        </div>
+        <div className="bg-white shadow-md rounded-lg p-6">
+          <h3 className="text-xl font-semibold mb-4">Market Overview</h3>
+          <p className="text-lg">Current market price: <span className="font-bold text-green-600">$25.50 / credit</span></p>
+          <p className="text-sm text-gray-600">Last updated: 2023-04-16 14:30 UTC</p>
+        </div>
+      </div>
+      
+      <div className="bg-white shadow-md rounded-lg p-6">
+        <h2 className="text-2xl font-semibold mb-4">Recent Transactions</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left border-b">
+                <th className="pb-2">Date</th>
+                <th className="pb-2">Type</th>
+                <th className="pb-2">Amount</th>
+                <th className="pb-2">Project</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((transaction) => (
+                <tr key={transaction.id} className="border-b">
+                  <td className="py-2">{transaction.date}</td>
+                  <td className="py-2">
+                    {transaction.type === 'buy' ? (
+                      <span className="flex items-center text-green-600">
+                        <ArrowDownRight size={16} className="mr-1" /> Buy
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-blue-600">
+                        <ArrowUpRight size={16} className="mr-1" /> Sell
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2">
+                    <span className="font-semibold">{transaction.amount}</span> credits
+                  </td>
+                  <td className="py-2">{transaction.project}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Wallet;
+--------------------------------------------
+
+ThemeContext.jsx
+--------------------
+import React, { createContext, useState, useContext, useEffect } from 'react'
+
+const ThemeContext = createContext()
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext)
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider')
+  }
+  return context
+}
+
+export const ThemeProvider = ({ children }) => {
+  const [isDarkMode, setIsDarkMode] = useState(false)
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme')
+    if (savedTheme) {
+      setIsDarkMode(savedTheme === 'dark')
+    } else {
+      setIsDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light')
+  }, [isDarkMode])
+
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode)
+  }
+
+  return (
+    <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  )
+}
+--------------------------------
+
+Navbar.jsx
+----------------
+import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Menu, X, ChevronDown, Sun, Moon } from 'lucide-react'
+import Logo from './Logo'
+import { useTheme } from '../contexts/ThemeContext'
+
+const Navbar = ({ user, setUser }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const { isDarkMode, toggleTheme } = useTheme()
+
+  const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
+  const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen)
+
+  const handleLogout = () => {
+    setUser(null)
+  }
+
+  return (
+    <nav className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white p-4 sticky top-0 z-50 shadow-md">
+      <div className="container mx-auto flex justify-between items-center">
+        <Link to="/" className="flex items-center space-x-2">
+          <Logo className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+          <span className="text-xl font-bold">TerraToken</span>
+        </Link>
+        <div className="hidden md:flex space-x-6">
+          <Link to="/" className="hover:text-purple-600 transition duration-300">Home</Link>
+          <Link to="/marketplace" className="hover:text-purple-600 transition duration-300">Marketplace</Link>
+          <Link to="/about" className="hover:text-purple-600 transition duration-300">About</Link>
+          <Link to="/news" className="hover:text-purple-600 transition duration-300">News</Link>
+        </div>
+        <div className="hidden md:flex items-center space-x-4">
+          <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition duration-300">
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          {user ? (
+            <div className="relative">
+              <button
+                onClick={toggleDropdown}
+                className="flex items-center space-x-1 hover:text-purple-600 transition duration-300"
+              >
+                <span>{user.name}</span>
+                <ChevronDown size={20} />
+              </button>
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1">
+                  <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Edit User Details</Link>
+                  <Link to="/wallet" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Wallet</Link>
+                  <button
+                    onClick={handleLogout}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link to="/auth" className="bg-purple-600 text-white px-4 py-2 rounded-full hover:bg-purple-700 transition duration-300">Login / Sign Up</Link>
+          )}
+        </div>
+        <button className="md:hidden" onClick={toggleMenu}>
+          {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+      {isMenuOpen && (
+        <div className="md:hidden mt-4 space-y-4">
+          <Link to="/" className="block hover:text-purple-600 transition duration-300">Home</Link>
+          <Link to="/marketplace" className="block hover:text-purple-600 transition duration-300">Marketplace</Link>
+          <Link to="/about" className="block hover:text-purple-600 transition duration-300">About</Link>
+          <Link to="/news" className="block hover:text-purple-600 transition duration-300">News</Link>
+          <button onClick={toggleTheme} className="flex items-center hover:text-purple-600 transition duration-300">
+            {isDarkMode ? <Sun size={20} className="mr-2" /> : <Moon size={20} className="mr-2" />}
+            {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+          </button>
+          {user ? (
+            <>
+              <Link to="/profile" className="block hover:text-purple-600 transition duration-300">Edit User Details</Link>
+              <Link to="/wallet" className="block hover:text-purple-600 transition duration-300">Wallet</Link>
+              <button onClick={handleLogout} className="w-full text-left hover:text-purple-600 transition duration-300">Logout</button>
+            </>
+          ) : (
+            <Link to="/auth" className="block w-full bg-purple-600 text-white px-4 py-2 rounded-full hover:bg-purple-700 transition duration-300 text-center">Login / Sign Up</Link>
+          )}
+        </div>
+      )}
+    </nav>
+  )
+}
+
+export default Navbar
+------------------------------
+
+Auth.jsx
+-------------
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import Logo from '../components/Logo'
+
+const Auth = ({ setUser }) => {
+  const [isLogin, setIsLogin] = useState(true)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const observerOptions = {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('fade-in');
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.animate-on-scroll').forEach(el => {
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    // Simulating authentication
+    if (isLogin) {
+      // Login logic
+      setUser({ name: 'John Doe', email }) // Replace with actual user data
+    } else {
+      // Signup logic
+      setUser({ name, email })
+    }
+    navigate('/')
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900">
+      <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-md animate-on-scroll">
+        <div className="flex items-center justify-center mb-6">
+          <Logo className="w-10 h-10 text-purple-600 dark:text-purple-400 mr-2" />
+          <h1 className="text-2xl font-bold gradient-text">TerraToken</h1>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {!isLogin && (
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full p-3 border rounded focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                required
+              />
+            </div>
+          )}
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full p-3 border rounded focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-3 border rounded focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-purple-600 text-white py-3 rounded-md hover:bg-purple-700 transition duration-300"
+          >
+            {isLogin ? 'Login' : 'Sign Up'}
+          </button>
+        </form>
+        <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          <button
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-purple-600 hover:text-purple-500 font-medium"
+          >
+            {isLogin ? 'Sign Up' : 'Login'}
+          </button>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export default Auth
+------------------------------------
+
+
+vite.config.ts
+----------------------
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react()],
+})
+-----------------------
+
+package.json
+-------------
+{
+  "name": "carboncredit-marketplace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.4",
+    "lucide-react": "^0.344.0",
+    "react": "^18.3.1",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.1",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.18",
+    "eslint": "^9.9.1",
+    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-refresh": "^0.4.11",
+    "globals": "^15.9.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.3.0",
+    "vite": "^5.4.2"
+  }
+}
+-------------------------
+
+main.jsx
+-----------
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+
+#progress
