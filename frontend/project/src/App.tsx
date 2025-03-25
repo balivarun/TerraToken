@@ -4,13 +4,13 @@ import { Leaf, ArrowLeftRight, Shield, BarChart2, Globe2 } from 'lucide-react';
 function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white">
-      
+
       <nav className="bg-white/80 backdrop-blur-sm fixed w-full z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <Leaf className="h-8 w-8 text-green-600" />
-              <span className="text-2xl font-bold text-gray-800">TeeraToken</span>
+              <span className="text-2xl font-bold text-green-800">TerraToken</span>
             </div>
             <div className="hidden md:flex space-x-8">
               <a href="#" className="text-gray-600 hover:text-green-600">Platform</a>
@@ -24,7 +24,7 @@ function App() {
           </div>
         </div>
       </nav>
-      
+
 
       <section className="pt-32 pb-20 px-4">
         <div className="max-w-7xl mx-auto">
@@ -55,7 +55,7 @@ function App() {
           </div>
         </div>
       </section>
-      
+
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid md:grid-cols-3 gap-12">
@@ -83,7 +83,7 @@ function App() {
           </div>
         </div>
       </section>
-      
+
 
       <section className="py-20 bg-green-600">
         <div className="max-w-4xl mx-auto text-center px-4">
@@ -99,8 +99,8 @@ function App() {
           </button>
         </div>
       </section>
-      
-      
+
+
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8">
